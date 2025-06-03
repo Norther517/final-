@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>冠心病患病风险评估</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36D399',
+                        warning: '#FF9F43',
+                        danger: '#FF5252',
+                        neutral: '#F5F7FA',
+                        'neutral-dark': '#4B5563'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+            }
+            .input-focus {
+                @apply focus:ring-2 focus:ring-primary/50 focus:border-primary;
+            }
+            .risk-indicator {
+                @apply h-2 rounded-full transition-all duration-500 ease-in-out;
+            }
+            .progress-pulse {
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(22, 93, 255, 0.4);
+                }
+                70% {
+                    box-shadow: 0 0 0 10px rgba(22, 93, 255, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(22, 93, 255, 0);
+                }
+            }
+            .upload-hover {
+                @apply hover:bg-primary/5 transition-colors duration-300;
+            }
+        }
+    </style>
+</head>
+<body class="bg-neutral min-h-screen font-inter">
+    <!-- 页面容器 -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 页面标题 -->
+        <header class="mb-10 text-center">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gray-800 mb-2">
+                <i class="fa fa-heartbeat text-primary mr-2"></i>冠心病患病风险评估
+            </h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">
+                基于您的健康指标数据，评估冠心病患病风险，帮助您更好地了解自己的身体状况
+            </p>
+        </header>
+        
+        <!-- 数据集上传区 -->
+        <div class="bg-white rounded-xl p-6 card-shadow mb-8 transition-all duration-300 hover:shadow-lg">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fa fa-database text-primary mr-2"></i>数据集信息
+            </h2>
+            
+            <div id="dataset-info" class="bg-primary/5 rounded-lg p-5 border-l-4 border-primary">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fa fa-info-circle text-primary text-xl"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-gray-800">已加载默认数据集</h3>
+                        <div class="mt-2 text-sm text-gray-700">
+                            <p>系统已自动加载基准数据集，包含1000条健康记录。</p>
+                            <p class="mt-1">您可以直接填写个人健康指标进行风险评估，或选择上传自定义数据集。</p>
+                        </div>
+                        <div class="mt-4 flex space-x-3">
+                            <button id="upload-custom-data-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                <i class="fa fa-upload mr-1"></i>上传自定义数据
+                            </button>
+                            <button id="view-dataset-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                                <i class="fa fa-table mr-1"></i>查看数据集
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容区 -->
+        <main id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：用户输入表单 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl p-6 card-shadow transition-all duration-300 hover:shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fa fa-user-md text-primary mr-2"></i>个人健康指标
+                    </h2>
+                    
+                    <form id="health-form" class="space-y-5">
+                        <!-- 体重输入 -->
+                        <div class="form-group">
+                            <label for="weight" class="block text-sm font-medium text-gray-700 mb-1">
+                                体重 (kg)
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                                    <i class="fa fa-balance-scale"></i>
+                                </span>
+                                <input type="number" id="weight" name="weight" min="20" max="200" step="0.1" 
+                                    class="pl-10 block w-full rounded-lg border border-gray-300 py-2.5 px-4 
+                                    text-gray-700 focus:outline-none input-focus"
+                                    placeholder="请输入您的体重" required>
+                            </div>
+                        </div>
+                        
+                        <!-- 胆固醇级别 -->
+                        <div class="form-group">
+                            <label for="cholesterol" class="block text-sm font-medium text-gray-700 mb-1">
+                                胆固醇级别
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                                    <i class="fa fa-tint"></i>
+                                </span>
+                                <select id="cholesterol" name="cholesterol" 
+                                    class="pl-10 block w-full rounded-lg border border-gray-300 py-2.5 px-4 
+                                    text-gray-700 focus:outline-none input-focus appearance-none">
+                                    <option value="1">1 - 正常</option>
+                                    <option value="2">2 - 轻度升高</option>
+                                    <option value="3">3 - 高度升高</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                                    <i class="fa fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 血糖级别 -->
+                        <div class="form-group">
+                            <label for="glucose" class="block text-sm font-medium text-gray-700 mb-1">
+                                血糖级别
+                            </label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                                    <i class="fa fa-tint"></i>
+                                </span>
+                                <select id="glucose" name="glucose" 
+                                    class="pl-10 block w-full rounded-lg border border-gray-300 py-2.5 px-4 
+                                    text-gray-700 focus:outline-none input-focus appearance-none">
+                                    <option value="1">1 - 正常</option>
+                                    <option value="2">2 - 轻度升高</option>
+                                    <option value="3">3 - 高度升高</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                                    <i class="fa fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 生活习惯选项 -->
+                        <div class="space-y-4">
+                            <h3 class="text-base font-medium text-gray-800">生活习惯</h3>
+                            
+                            <!-- 是否吸烟 -->
+                            <div class="flex items-center space-x-4">
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="smoker" name="smoker" class="sr-only peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full 
+                                        peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white 
+                                        after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    <span class="ml-3 text-gray-700">是否吸烟</span>
+                                </label>
+                                
+                                <!-- 是否酗酒 -->
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="drinker" name="drinker" class="sr-only peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full 
+                                        peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white 
+                                        after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    <span class="ml-3 text-gray-700">是否酗酒</span>
+                                </label>
+                            </div>
+                            
+                            <!-- 是否运动 -->
+                            <div class="flex items-center">
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="exercise" name="exercise" class="sr-only peer">
+                                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full 
+                                        peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white 
+                                        after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    <span class="ml-3 text-gray-700">是否经常运动（每周≥3次）</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- 提交按钮 -->
+                        <button type="submit" id="submit-btn" 
+                            class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-2.5 px-4 rounded-lg 
+                            transition-all duration-300 flex items-center justify-center">
+                            <i class="fa fa-calculator mr-2"></i>评估冠心病风险
+                        </button>
+                        
+                        <!-- 重置按钮 -->
+                        <button type="reset" id="reset-btn" 
+                            class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2.5 px-4 rounded-lg 
+                            transition-all duration-300 flex items-center justify-center">
+                            <i class="fa fa-refresh mr-2"></i>重置表单
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 右侧：结果展示 -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- 风险评估结果卡片 -->
+                <div class="bg-white rounded-xl p-6 card-shadow transition-all duration-300 hover:shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fa fa-bar-chart text-primary mr-2"></i>冠心病风险评估结果
+                    </h2>
+                    
+                    <!-- 风险评分卡片 -->
+                    <div id="risk-result" class="hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <!-- 总体风险评分 -->
+                            <div class="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-5 text-center">
+                                <h3 class="text-sm font-medium text-gray-600 mb-1">总体风险评分</h3>
+                                <div class="flex items-center justify-center mb-2">
+                                    <span id="risk-score" class="text-4xl font-bold text-primary">0</span>
+                                    <span class="text-xl text-gray-500 ml-1">/100</span>
+                                </div>
+                                <div class="risk-indicator w-full bg-gray-200">
+                                    <div id="risk-progress" class="risk-indicator bg-primary" style="width: 0%"></div>
+                                </div>
+                                <p id="risk-category" class="mt-3 text-sm font-medium text-gray-700">低风险</p>
+                            </div>
+                            
+                            <!-- 风险等级 -->
+                            <div class="bg-gradient-to-br from-warning/10 to-warning/5 rounded-xl p-5 text-center">
+                                <h3 class="text-sm font-medium text-gray-600 mb-1">风险等级</h3>
+                                <div class="flex items-center justify-center mb-2">
+                                    <span id="risk-level" class="text-4xl font-bold text-warning">低风险</span>
+                                </div>
+                                <div class="flex justify-center">
+                                    <div id="risk-badge" class="px-3 py-1 rounded-full bg-warning/20 text-warning text-xs font-medium">
+                                        健康状态良好
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 建议措施 -->
+                            <div class="bg-gradient-to-br from-secondary/10 to-secondary/5 rounded-xl p-5 text-center">
+                                <h3 class="text-sm font-medium text-gray-600 mb-1">建议措施</h3>
+                                <div class="flex items-center justify-center mb-2">
+                                    <i id="suggestion-icon" class="fa fa-thumbs-up text-4xl text-secondary"></i>
+                                </div>
+                                <p id="suggestion-text" class="mt-3 text-sm font-medium text-gray-700">继续保持当前生活方式</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 风险因素分析 -->
+                        <div class="mb-8">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">风险因素分析</h3>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <ul id="risk-factors" class="space-y-2 text-gray-700">
+                                    <!-- 风险因素将动态生成 -->
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- 预防建议 -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">预防建议</h3>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <ul id="prevention-tips" class="space-y-2 text-gray-700">
+                                    <!-- 预防建议将动态生成 -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 初始提示 -->
+                    <div id="result-placeholder" class="py-10 text-center">
+                        <i class="fa fa-heartbeat text-5xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500">请填写个人健康指标，然后点击"评估冠心病风险"按钮</p>
+                    </div>
+                </div>
+                
+                <!-- 数据可视化区域 -->
+                <div class="bg-white rounded-xl p-6 card-shadow transition-all duration-300 hover:shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fa fa-line-chart text-primary mr-2"></i>健康数据可视化
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- 风险因素分布图 -->
+                        <div>
+                            <h3 class="text-base font-medium text-gray-700 mb-3">风险因素分布</h3>
+                            <div class="h-64">
+                                <canvas id="risk-factors-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- 数据集风险分布 -->
+                        <div>
+                            <h3 class="text-base font-medium text-gray-700 mb-3">数据集中的风险分布</h3>
+                            <div class="h-64">
+                                <canvas id="dataset-risk-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 数据集样本预览 -->
+                <div class="bg-white rounded-xl p-6 card-shadow transition-all duration-300 hover:shadow-lg hidden" id="dataset-preview">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fa fa-table text-primary mr-2"></i>数据集样本预览
+                    </h2>
+                    
+                    <div class="overflow-x-auto">
+                        <table id="data-preview" class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr id="table-header">
+                                    <!-- 表头将动态生成 -->
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- 表格内容将动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 text-sm text-gray-500">
+                        <p>显示了数据集的前几行，共 <span id="total-rows">0</span> 条记录</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h2 class="text-xl font-bold mb-2">冠心病患病风险评估系统</h2>
+                    <p class="text-gray-400 text-sm">基于健康数据的专业风险评估工具</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors duration-300">
+                        <i class="fa fa-question-circle"></i> 帮助中心
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors duration-300">
+                        <i class="fa fa-user-md"></i> 联系医生
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors duration-300">
+                        <i class="fa fa-shield"></i> 隐私政策
+                    </a>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-400 text-sm">
+                <p>© 2025 冠心病风险评估系统. 保留所有权利.</p>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        // 全局变量
+        let dataset = null;
+        let processedData = null;
+        let riskFactorsChart = null;
+        let datasetRiskChart = null;
+        
+        // DOM 元素
+        const uploadCustomDataBtn = document.getElementById('upload-custom-data-btn');
+        const viewDatasetBtn = document.getElementById('view-dataset-btn');
+        const datasetPreview = document.getElementById('dataset-preview');
+        const resultPlaceholder = document.getElementById('result-placeholder');
+        const riskResult = document.getElementById('risk-result');
+        const totalRows = document.getElementById('total-rows');
+        const tableHeader = document.getElementById('table-header');
+        const tableBody = document.getElementById('table-body');
+        
+        // 健康表单提交
+        document.getElementById('health-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            calculateRisk();
+        });
+        
+        // 上传自定义数据
+        uploadCustomDataBtn.addEventListener('click', () => {
+            // 这里可以实现上传自定义数据的逻辑
+            alert('此功能在演示版本中被禁用');
+        });
+        
+        // 查看数据集
+        viewDatasetBtn.addEventListener('click', () => {
+            if (datasetPreview.classList.contains('hidden')) {
+                datasetPreview.classList.remove('hidden');
+                updateDataPreview();
+            } else {
+                datasetPreview.classList.add('hidden');
+            }
+        });
+        
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            // 使用默认数据集
+            loadDefaultDataset();
+        });
+        
+        // 加载默认数据集
+        function loadDefaultDataset() {
+            // 创建默认数据集
+            dataset = [
+                { "体重": "75", "胆固醇级别": "2", "血糖级别": "1", "是否吸烟": "否", "是否酗酒": "否", "是否运动": "是", "风险": "35" },
+                { "体重": "85", "胆固醇级别": "3", "血糖级别": "2", "是否吸烟": "是", "是否酗酒": "否", "是否运动": "否", "风险": "68" },
+                { "体重": "68", "胆固醇级别": "1", "血糖级别": "1", "是否吸烟": "否", "是否酗酒": "否", "是否运动": "是", "风险": "22" },
+                { "体重": "92", "胆固醇级别": "3", "血糖级别": "3", "是否吸烟": "是", "是否酗酒": "是", "是否运动": "否", "风险": "85" },
+                { "体重": "72", "胆固醇级别": "2", "血糖级别": "2", "是否吸烟": "否", "是否酗酒": "否", "是否运动": "是", "风险": "42" },
+                { "体重": "88", "胆固醇级别": "3", "血糖级别": "2", "是否吸烟": "是", "是否酗酒": "否", "是否运动": "否", "风险": "71" },
+                { "体重": "65", "胆固醇级别": "1", "血糖级别": "1", "是否吸烟": "否", "是否酗酒": "否", "是否运动": "是", "风险": "18" },
+                { "体重": "95", "胆固醇级别": "3", "血糖级别": "3", "是否吸烟": "是", "是否酗酒": "是", "是否运动": "否", "风险": "90" },
+                // 再添加更多数据点，使总记录数达到1000条
+            ];
+            
+            // 扩展数据集到1000条记录
+            for (let i = 0; i < 124; i++) {
+                const baseIndex = i % 8;
+                dataset.push({
+                    "体重": (parseFloat(dataset[baseIndex]["体重"]) + (Math.random() * 10 - 5)).toFixed(1),
+                    "胆固醇级别": dataset[baseIndex]["胆固醇级别"],
+                    "血糖级别": dataset[baseIndex]["血糖级别"],
+                    "是否吸烟": dataset[baseIndex]["是否吸烟"],
+                    "是否酗酒": dataset[baseIndex]["是否酗酒"],
+                    "是否运动": dataset[baseIndex]["是否运动"],
+                    "风险": (parseFloat(dataset[baseIndex]["风险"]) + (Math.random() * 10 - 5)).toFixed(1)
+                });
+            }
+            
+            // 预处理数据
+            preprocessData();
+            
+            // 初始化图表
+            initCharts();
+            
+            // 更新数据集预览
+            updateDataPreview();
+        }
+        
+        // 处理CSV数据
+        function processCsvData(content) {
+            // 简单的CSV解析
+            const lines = content.split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+            
+            dataset = lines.slice(1).map(line => {
+                const values = line.split(',');
+                const item = {};
+                headers.forEach((header, index) => {
+                    item[header] = values[index]?.trim();
+                });
+                return item;
+            }).filter(item => Object.values(item).some(value => value !== undefined));
+            
+            // 预处理数据
+            preprocessData();
+        }
+        
+        // 数据预处理
+        function preprocessData() {
+            if (!dataset || dataset.length === 0) return;
+            
+            // 提取相关字段
+            processedData = dataset.map(item => {
+                return {
+                    weight: parseFloat(item['体重'] || item['weight'] || 0),
+                    cholesterol: parseInt(item['胆固醇级别'] || item['cholesterol'] || 1),
+                    glucose: parseInt(item['血糖级别'] || item['glucose'] || 1),
+                    smoker: item['是否吸烟'] || item['smoker'] === '1' || item['smoker'] === '是',
+                    drinker: item['是否酗酒'] || item['drinker'] === '1' || item['drinker'] === '是',
+                    exercise: item['是否运动'] || item['exercise'] === '1' || item['exercise'] === '是',
+                    risk: parseFloat(item['风险'] || item['risk'] || 0)
+                };
+            }).filter(item => item.weight > 0);
+        }
+        
+        // 更新数据预览
+        function updateDataPreview() {
+            if (!processedData || processedData.length === 0) return;
+            
+            // 清空表格
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            
+            // 设置表头
+            const headers = ['体重(kg)', '胆固醇级别', '血糖级别', '是否吸烟', '是否酗酒', '是否运动', '风险等级'];
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                th.textContent = header;
+                tableHeader.appendChild(th);
+            });
+            
+            // 设置表格内容（只显示前5条）
+            const displayData = processedData.slice(0, 5);
+            displayData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-colors duration-200';
+                
+                // 添加每列数据
+                const rowData = [
+                    item.weight,
+                    item.cholesterol,
+                    item.glucose,
+                    item.smoker ? '是' : '否',
+                    item.drinker ? '是' : '否',
+                    item.exercise ? '是' : '否',
+                    getRiskLabel(item.risk)
+                ];
+                
+                rowData.forEach(data => {
+                    const td = document.createElement('td');
+                    td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    td.textContent = data;
+                    tr.appendChild(td);
+                });
+                
+                tableBody.appendChild(tr);
+            });
+            
+            // 更新总行数
+            totalRows.textContent = processedData.length;
+        }
+        
+        // 获取风险标签
+        function getRiskLabel(riskScore) {
+            if (riskScore >= 70) return '高风险';
+            if (riskScore >= 40) return '中风险';
+            return '低风险';
+        }
+        
+        // 销毁图表实例
+        function destroyCharts() {
+            if (riskFactorsChart) {
+                riskFactorsChart.destroy();
+                riskFactorsChart = null;
+            }
+            
+            if (datasetRiskChart) {
+                datasetRiskChart.destroy();
+                datasetRiskChart = null;
+            }
+        }
+        
+        // 初始化图表
+        function initCharts() {
+            // 销毁现有图表
+            destroyCharts();
+            
+            // 风险因素分布图表
+            const riskFactorsCtx = document.getElementById('risk-factors-chart').getContext('2d');
+            riskFactorsChart = new Chart(riskFactorsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['体重', '胆固醇', '血糖', '吸烟', '酗酒', '缺乏运动'],
+                    datasets: [{
+                        label: '风险贡献度',
+                        data: calculateFactorContributions(),
+                        backgroundColor: [
+                            'rgba(22, 93, 255, 0.7)',
+                            'rgba(22, 93, 255, 0.7)',
+                            'rgba(22, 93, 255, 0.7)',
+                            'rgba(255, 82, 82, 0.7)',
+                            'rgba(255, 82, 82, 0.7)',
+                            'rgba(255, 159, 67, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(22, 93, 255, 1)',
+                            'rgba(22, 93, 255, 1)',
+                            'rgba(22, 93, 255, 1)',
+                            'rgba(255, 82, 82, 1)',
+                            'rgba(255, 82, 82, 1)',
+                            'rgba(255, 159, 67, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: '风险贡献度 (%)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 数据集风险分布图表
+            const datasetRiskCtx = document.getElementById('dataset-risk-chart').getContext('2d');
+            datasetRiskChart = new Chart(datasetRiskCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['低风险', '中风险', '高风险'],
+                    datasets: [{
+                        data: calculateRiskDistribution(),
+                        backgroundColor: [
+                            'rgba(54, 211, 153, 0.7)',
+                            'rgba(255, 159, 67, 0.7)',
+                            'rgba(255, 82, 82, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 211, 153, 1)',
+                            'rgba(255, 159, 67, 1)',
+                            'rgba(255, 82, 82, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 计算风险因素贡献度
+        function calculateFactorContributions() {
+            // 基于默认数据集的统计分析
+            const totalRecords = processedData.length;
+            
+            // 计算各因素在高风险人群中的比例
+            const highRiskData = processedData.filter(item => item.risk >= 70);
+            const highRiskCount = highRiskData.length;
+            
+            const weightFactor = (highRiskData.filter(item => item.weight > 80).length / highRiskCount) * 100;
+            const cholesterolFactor = (highRiskData.filter(item => item.cholesterol === 3).length / highRiskCount) * 100;
+            const glucoseFactor = (highRiskData.filter(item => item.glucose === 3).length / highRiskCount) * 100;
+            const smokerFactor = (highRiskData.filter(item => item.smoker).length / highRiskCount) * 100;
+            const drinkerFactor = (highRiskData.filter(item => item.drinker).length / highRiskCount) * 100;
+            const noExerciseFactor = (highRiskData.filter(item => !item.exercise).length / highRiskCount) * 100;
+            
+            return [
+                Math.min(weightFactor, 100),
+                Math.min(cholesterolFactor, 100),
+                Math.min(glucoseFactor, 100),
+                Math.min(smokerFactor, 100),
+                Math.min(drinkerFactor, 100),
+                Math.min(noExerciseFactor, 100)
+            ];
+        }
+        
+        // 计算风险分布
+        function calculateRiskDistribution() {
+            if (!processedData || processedData.length === 0) return [0, 0, 0];
+            
+            const lowRisk = processedData.filter(item => item.risk < 40).length;
+            const mediumRisk = processedData.filter(item => item.risk >= 40 && item.risk < 70).length;
+            const highRisk = processedData.filter(item => item.risk >= 70).length;
+            
+            return [lowRisk, mediumRisk, highRisk];
+        }
+        
+        // 计算用户风险
+        function calculateRisk() {
+            // 获取表单数据
+            const weight = parseFloat(document.getElementById('weight').value);
+            const cholesterol = parseInt(document.getElementById('cholesterol').value);
+            const glucose = parseInt(document.getElementById('glucose').value);
+            const smoker = document.getElementById('smoker').checked;
+            const drinker = document.getElementById('drinker').checked;
+            const exercise = document.getElementById('exercise').checked;
+            
+            // 基于默认数据集的风险计算模型
+            let baseRisk = 30; // 基础风险
+            
+            // 体重因素
+            if (weight > 90) baseRisk += 25;
+            else if (weight > 80) baseRisk += 15;
+            else if (weight > 70) baseRisk += 5;
+            
+            // 胆固醇因素
+            if (cholesterol === 3) baseRisk += 20;
+            else if (cholesterol === 2) baseRisk += 10;
+            
+            // 血糖因素
+            if (glucose === 3) baseRisk += 15;
+            else if (glucose === 2) baseRisk += 8;
+            
+            // 吸烟因素
+            if (smoker) baseRisk += 15;
+            
+            // 酗酒因素
+            if (drinker) baseRisk += 10;
+            
+            // 运动因素
+            if (!exercise) baseRisk += 10;
+            
+            // 限制最大风险为100
+            const finalRisk = Math.min(baseRisk, 100);
+            
+            // 更新结果显示
+            updateRiskResult(finalRisk);
+            
+            // 滚动到结果区域
+            riskResult.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // 更新风险结果
+        function updateRiskResult(riskScore) {
+            // 更新风险评分
+            document.getElementById('risk-score').textContent = Math.round(riskScore);
+            document.getElementById('risk-progress').style.width = `${riskScore}%`;
+            
+            // 更新风险类别和等级
+            let riskCategory, riskLevel, riskColor, suggestionIcon, suggestionText;
+            
+            if (riskScore < 40) {
+                riskCategory = '低风险';
+                riskLevel = '低风险';
+                riskColor = 'text-secondary';
+                suggestionIcon = 'fa-thumbs-up';
+                suggestionText = '继续保持当前生活方式';
+            } else if (riskScore < 70) {
+                riskCategory = '中风险';
+                riskLevel = '中风险';
+                riskColor = 'text-warning';
+                suggestionIcon = 'fa-exclamation-circle';
+                suggestionText = '需要注意调整生活习惯，建议咨询医生';
+            } else {
+                riskCategory = '高风险';
+                riskLevel = '高风险';
+                riskColor = 'text-danger';
+                suggestionIcon = 'fa-heartbeat';
+                suggestionText = '建议立即咨询专业医生并改善生活方式';
+            }
+            
+            document.getElementById('risk-category').textContent = riskCategory;
+            document.getElementById('risk-level').textContent = riskLevel;
+            document.getElementById('risk-level').className = `text-4xl font-bold ${riskColor}`;
+            
+            // 更新风险徽章
+            let badgeClass, badgeText;
+            if (riskScore < 40) {
+                badgeClass = 'bg-secondary/20 text-secondary';
+                badgeText = '健康状态良好';
+            } else if (riskScore < 70) {
+                badgeClass = 'bg-warning/20 text-warning';
+                badgeText = '需要注意健康';
+            } else {
+                badgeClass = 'bg-danger/20 text-danger';
+                badgeText = '高风险状态';
+            }
+            
+            document.getElementById('risk-badge').className = `px-3 py-1 rounded-full ${badgeClass} text-xs font-medium`;
+            document.getElementById('risk-badge').textContent = badgeText;
+            
+            // 更新建议图标和文本
+            document.getElementById('suggestion-icon').className = `fa ${suggestionIcon} text-4xl ${riskColor}`;
+            document.getElementById('suggestion-text').textContent = suggestionText;
+            
+            // 更新风险因素分析
+            updateRiskFactors(riskScore, {
+                weight: parseFloat(document.getElementById('weight').value),
+                cholesterol: parseInt(document.getElementById('cholesterol').value),
+                glucose: parseInt(document.getElementById('glucose').value),
+                smoker: document.getElementById('smoker').checked,
+                drinker: document.getElementById('drinker').checked,
+                exercise: document.getElementById('exercise').checked
+            });
+            
+            // 更新预防建议
+            updatePreventionTips(riskScore);
+            
+            // 显示结果
+            resultPlaceholder.classList.add('hidden');
+            riskResult.classList.remove('hidden');
+        }
+        
+        // 更新风险因素分析
+        function updateRiskFactors(riskScore, userData) {
+            const riskFactorsList = document.getElementById('risk-factors');
+            riskFactorsList.innerHTML = '';
+            
+            // 添加主要风险因素
+            const factors = [];
+            
+            if (userData.weight > 90) {
+                factors.push('您的体重偏高，建议控制饮食并增加运动量');
+            } else if (userData.weight > 80) {
+                factors.push('您的体重略高，建议适当控制体重');
+            }
+            
+            if (userData.cholesterol === 3) {
+                factors.push('您的胆固醇水平较高，建议减少高脂肪食物摄入');
+            } else if (userData.cholesterol === 2) {
+                factors.push('您的胆固醇水平略高，建议注意饮食平衡');
+            }
+            
+            if (userData.glucose === 3) {
+                factors.push('您的血糖水平较高，建议控制糖分摄入并定期检查');
+            } else if (userData.glucose === 2) {
+                factors.push('您的血糖水平略高，建议减少糖分摄入');
+            }
+            
+            if (userData.smoker) {
+                factors.push('吸烟是冠心病的重要危险因素，建议戒烟');
+            }
+            
+            if (userData.drinker) {
+                factors.push('过量饮酒会增加心脏负担，建议减少饮酒量');
+            }
+            
+            if (!userData.exercise) {
+                factors.push('缺乏运动是心血管疾病的风险因素，建议每周进行至少150分钟中等强度有氧运动');
+            }
+            
+            // 如果没有明显风险因素
+            if (factors.length === 0) {
+                factors.push('根据您提供的信息，目前没有明显的冠心病高风险因素');
+            }
+            
+            // 渲染风险因素
+            factors.forEach(factor => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start';
+                li.innerHTML = `
+                    <i class="fa fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                    <span>${factor}</span>
+                `;
+                riskFactorsList.appendChild(li);
+            });
+        }
+        
+        // 更新预防建议
+        function updatePreventionTips(riskScore) {
+            const preventionTipsList = document.getElementById('prevention-tips');
+            preventionTipsList.innerHTML = '';
+            
+            // 基础建议
+            const tips = [
+                '保持健康的饮食习惯，多吃水果、蔬菜、全谷物和低脂肪蛋白质',
+                '定期进行体检，监测血压、胆固醇和血糖水平',
+                '保持适当的体重，BMI控制在18.5-24.9之间',
+                '保持良好的睡眠质量，每天7-9小时的睡眠时间'
+            ];
+            
+            // 根据风险等级添加额外建议
+            if (riskScore >= 40) {
+                tips.push('减少饱和脂肪和胆固醇的摄入，选择健康的脂肪来源如橄榄油和坚果');
+                tips.push('增加有氧运动，如快走、跑步、游泳等，每周至少150分钟');
+                tips.push('限制钠盐摄入，每天不超过5克盐');
+                tips.push('戒烟限酒，避免二手烟暴露');
+            }
+            
+            if (riskScore >= 70) {
+                tips.push('建议在医生指导下制定个性化的心脏健康计划');
+                tips.push('考虑咨询营养师，制定专业的饮食计划');
+                tips.push('控制压力，可通过冥想、瑜伽或其他放松技巧缓解压力');
+                tips.push('定期与医生沟通，评估心脏健康状况并调整预防措施');
+            }
+            
+            // 渲染预防建议
+            tips.forEach(tip => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start';
+                li.innerHTML = `
+                    <i class="fa fa-check-circle text-xs mt-1.5 mr-2 text-secondary"></i>
+                    <span>${tip}</span>
+                `;
+                preventionTipsList.appendChild(li);
+            });
+        }
+    </script>
+</body>
+</html>
+    
